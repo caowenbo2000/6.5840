@@ -23,16 +23,35 @@ func ihash(key string) int {
 func Worker(mapf func(string, string) []KeyValue,
 	reducef func(string, []string) string) {
 
+	for {
+		taskInfo := CallGetTask()
+		if taskInfo == nil {
+			continue
+		}
+
+		if taskInfo.TaskType == MapTask {
+			mapWorker(taskInfo.FileName)
+		}
+		if taskInfo.TaskType == ReduceTask {
+			reduceWorker(taskInfo.ReduceId)
+		}
+
+	}
 }
 
-func startWork() {
+func mapWorker(fileName string) {
 
 }
 
-func CallGetTask() {
+func reduceWorker(reduceID int) {
+
+}
+
+func CallGetTask() *TaskInfo {
 	args := GetTaskArgs{}
 	reply := GetTaskReply{}
 	ok := call("Coordinator.GetTask", &args, &reply)
+
 	if ok {
 		fmt.Printf("reply.TaskInfo %v\n", reply.TaskInfo)
 	} else {

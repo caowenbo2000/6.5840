@@ -64,12 +64,12 @@ func (c *Coordinator) GetTask(args *GetTaskArgs, reply *GetTaskReply) {
 			}
 			if v.taskStatus == TaskInit ||
 				v.taskStatus == TaskRunning && time.Now().Unix() > taskTimeOut+v.startTime {
-				reply.TaskInfo = TaskInfo{MapTask, k, 0, 0}
+				reply.TaskInfo = &TaskInfo{MapTask, k, 0, 0}
 				return
 			}
 		}
 		if hasRunningTask {
-			reply.TaskInfo = TaskInfo{WaitTask, "", 0, 1}
+			reply.TaskInfo = &TaskInfo{WaitTask, "", 0, 1}
 			return
 		} else {
 			c.taskStage = ReduceStage
@@ -84,22 +84,22 @@ func (c *Coordinator) GetTask(args *GetTaskArgs, reply *GetTaskReply) {
 			}
 			if v.taskStatus == TaskInit ||
 				v.taskStatus == TaskRunning && time.Now().Unix() > taskTimeOut+v.startTime {
-				reply.TaskInfo = TaskInfo{ReduceTask, "", k, 0}
+				reply.TaskInfo = &TaskInfo{ReduceTask, "", k, 0}
 				return
 			}
 		}
 		if hasRunningTask {
-			reply.TaskInfo = TaskInfo{WaitTask, "", 0, 1}
+			reply.TaskInfo = &TaskInfo{WaitTask, "", 0, 1}
 			return
 		} else {
 			c.taskStage = DoneStage
-			reply.TaskInfo = TaskInfo{DoneTask, "", 0, 0}
+			reply.TaskInfo = &TaskInfo{DoneTask, "", 0, 0}
 			return
 		}
 	}
 
 	if c.taskStage == DoneStage {
-		reply.TaskInfo = TaskInfo{DoneTask, "", 0, 0}
+		reply.TaskInfo = &TaskInfo{DoneTask, "", 0, 0}
 		return
 	}
 	return

@@ -57,11 +57,11 @@ type GetTaskArgs struct {
 }
 
 type GetTaskReply struct {
-	TaskInfo TaskInfo
+	TaskInfo *TaskInfo
 }
 
 type DoneTaskArgs struct {
-	TaskInfo TaskInfo
+	TaskInfo *TaskInfo
 }
 
 type DoneTaskReply struct {
