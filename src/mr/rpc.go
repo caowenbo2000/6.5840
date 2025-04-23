@@ -40,10 +40,11 @@ const (
 	MapTask TaskType = iota
 	ReduceTask
 	WaitTask
-	TaskDone
+	DoneTask
 )
 
 type TaskInfo struct {
+	TaskType TaskType
 	//for map task
 	FileName string
 	//for reduce task
@@ -56,6 +57,12 @@ type GetTaskArgs struct {
 }
 
 type GetTaskReply struct {
-	TaskType TaskType
 	TaskInfo TaskInfo
+}
+
+type DoneTaskArgs struct {
+	TaskInfo TaskInfo
+}
+
+type DoneTaskReply struct {
 }

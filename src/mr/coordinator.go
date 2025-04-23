@@ -21,9 +21,9 @@ const (
 type taskStatus int
 
 const (
-	Init taskStatus = iota
-	Running
-	Done
+	TaskInit taskStatus = iota
+	TaskRunning
+	TaskDone
 )
 
 type taskInfo struct {
@@ -33,8 +33,8 @@ type taskInfo struct {
 
 type Coordinator struct {
 	taskStage    taskStage
-	mapStatus    map[string]taskInfo
-	reduceStatus map[int]taskInfo
+	mapStatus    map[string]*taskInfo
+	reduceStatus map[int]*taskInfo
 	mutex        sync.Mutex
 }
 
@@ -42,13 +42,13 @@ const taskTimeOut = int64(10)
 
 func CoordinatorInit(c *Coordinator, files []string, nReduce int) {
 	c.taskStage = MapStage
-	c.mapStatus = make(map[string]taskInfo)
-	c.reduceStatus = make(map[int]taskInfo)
+	c.mapStatus = make(map[string]*taskInfo)
+	c.reduceStatus = make(map[int]*taskInfo)
 	for _, v := range files {
-		c.mapStatus[v] = taskInfo{Init, 0}
+		c.mapStatus[v] = &taskInfo{TaskInit, 0}
 	}
 	for i := 0; i < nReduce; i++ {
-		c.reduceStatus[i] = taskInfo{Init, 0}
+		c.reduceStatus[i] = &taskInfo{TaskInit, 0}
 	}
 }
 
@@ -59,19 +59,17 @@ func (c *Coordinator) GetTask(args *GetTaskArgs, reply *GetTaskReply) {
 	if c.taskStage == MapStage {
 		hasRunningTask := false
 		for k, v := range c.mapStatus {
-			if v.taskStatus == Running {
+			if v.taskStatus == TaskRunning {
 				hasRunningTask = true
 			}
-			if v.taskStatus == Init ||
-				v.taskStatus == Running && time.Now().Unix() > taskTimeOut+v.startTime {
-				reply.TaskType = MapTask
-				reply.TaskInfo = TaskInfo{k, 0, 0}
+			if v.taskStatus == TaskInit ||
+				v.taskStatus == TaskRunning && time.Now().Unix() > taskTimeOut+v.startTime {
+				reply.TaskInfo = TaskInfo{MapTask, k, 0, 0}
 				return
 			}
 		}
 		if hasRunningTask {
-			reply.TaskType = WaitTask
-			reply.TaskInfo = TaskInfo{"", 0, 1}
+			reply.TaskInfo = TaskInfo{WaitTask, "", 0, 1}
 			return
 		} else {
 			c.taskStage = ReduceStage
@@ -81,33 +79,46 @@ func (c *Coordinator) GetTask(args *GetTaskArgs, reply *GetTaskReply) {
 	if c.taskStage == ReduceStage {
 		hasRunningTask := false
 		for k, v := range c.reduceStatus {
-			if v.taskStatus == Running {
+			if v.taskStatus == TaskRunning {
 				hasRunningTask = true
 			}
-			if v.taskStatus == Init ||
-				v.taskStatus == Running && time.Now().Unix() > taskTimeOut+v.startTime {
-				reply.TaskType = ReduceTask
-				reply.TaskInfo = TaskInfo{"", k, 0}
+			if v.taskStatus == TaskInit ||
+				v.taskStatus == TaskRunning && time.Now().Unix() > taskTimeOut+v.startTime {
+				reply.TaskInfo = TaskInfo{ReduceTask, "", k, 0}
 				return
 			}
 		}
 		if hasRunningTask {
-			reply.TaskType = WaitTask
-			reply.TaskInfo = TaskInfo{"", 0, 1}
+			reply.TaskInfo = TaskInfo{WaitTask, "", 0, 1}
 			return
 		} else {
 			c.taskStage = DoneStage
-			reply.TaskType = TaskDone
-			reply.TaskInfo = TaskInfo{"", 0, 0}
+			reply.TaskInfo = TaskInfo{DoneTask, "", 0, 0}
 			return
 		}
 	}
 
 	if c.taskStage == DoneStage {
-		reply.TaskType = TaskDone
-		reply.TaskInfo = TaskInfo{"", 0, 0}
+		reply.TaskInfo = TaskInfo{DoneTask, "", 0, 0}
 		return
 	}
+	return
+}
+
+func (c *Coordinator) DoneTask(args *DoneTaskArgs, reply *DoneTaskReply) {
+	reply = new(DoneTaskReply)
+	if args == nil {
+		return
+	}
+
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+	if args.TaskInfo.TaskType == MapTask {
+		c.mapStatus[args.TaskInfo.FileName].taskStatus = TaskDone
+	} else if args.TaskInfo.TaskType == ReduceTask {
+		c.reduceStatus[args.TaskInfo.ReduceId].taskStatus = TaskDone
+	}
+
 	return
 }
 
@@ -125,7 +136,7 @@ func (c *Coordinator) server() {
 	go http.Serve(l, nil)
 }
 
-// main/mrcoordinator.go calls Done() periodically to find out
+// main/mrcoordinator.go calls TaskDone() periodically to find out
 // if the entire job has finished.
 func (c *Coordinator) Done() bool {
 	c.mutex.Lock()
