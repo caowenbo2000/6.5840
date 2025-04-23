@@ -36,7 +36,7 @@ func CallGetTask() {
 	if ok {
 		fmt.Printf("reply.TaskInfo %v\n", reply.TaskInfo)
 	} else {
-		fmt.Printf("call failed!\n")
+		fmt.Printf("call failed! \n")
 	}
 }
 
