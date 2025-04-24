@@ -54,7 +54,7 @@ func CoordinatorInit(c *Coordinator, files []string, nReduce int) {
 	c.nReduce = nReduce
 }
 
-func (c *Coordinator) GetTask(args *GetTaskArgs, reply *GetTaskReply) {
+func (c *Coordinator) GetTask(args *GetTaskArgs, reply *GetTaskReply) error {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
@@ -67,12 +67,12 @@ func (c *Coordinator) GetTask(args *GetTaskArgs, reply *GetTaskReply) {
 			if v.taskStatus == TaskInit ||
 				v.taskStatus == TaskRunning && time.Now().Unix() > taskTimeOut+v.startTime {
 				reply.TaskInfo = &TaskInfo{TaskType: MapTask, NReduce: c.nReduce, FileName: k}
-				return
+				return nil
 			}
 		}
 		if hasRunningTask {
 			reply.TaskInfo = &TaskInfo{TaskType: WaitTask, WaitTime: 1}
-			return
+			return nil
 		} else {
 			c.taskStage = ReduceStage
 		}
@@ -87,30 +87,30 @@ func (c *Coordinator) GetTask(args *GetTaskArgs, reply *GetTaskReply) {
 			if v.taskStatus == TaskInit ||
 				v.taskStatus == TaskRunning && time.Now().Unix() > taskTimeOut+v.startTime {
 				reply.TaskInfo = &TaskInfo{TaskType: ReduceTask, ReduceId: k}
-				return
+				return nil
 			}
 		}
 		if hasRunningTask {
 			reply.TaskInfo = &TaskInfo{TaskType: WaitTask, WaitTime: 1}
-			return
+			return nil
 		} else {
 			c.taskStage = DoneStage
 			reply.TaskInfo = &TaskInfo{TaskType: DoneTask}
-			return
+			return nil
 		}
 	}
 
 	if c.taskStage == DoneStage {
 		reply.TaskInfo = &TaskInfo{TaskType: DoneTask}
-		return
+		return nil
 	}
-	return
+	return nil
 }
 
-func (c *Coordinator) DoneTask(args *DoneTaskArgs, reply *DoneTaskReply) {
+func (c *Coordinator) DoneTask(args *DoneTaskArgs, reply *DoneTaskReply) error {
 	reply = new(DoneTaskReply)
 	if args == nil {
-		return
+		return nil
 	}
 
 	c.mutex.Lock()
@@ -121,7 +121,7 @@ func (c *Coordinator) DoneTask(args *DoneTaskArgs, reply *DoneTaskReply) {
 		c.reduceStatus[args.TaskInfo.ReduceId].taskStatus = TaskDone
 	}
 
-	return
+	return nil
 }
 
 // start a thread that listens for RPCs from worker.go
@@ -135,6 +135,7 @@ func (c *Coordinator) server() {
 	if e != nil {
 		log.Fatal("listen error:", e)
 	}
+	log.Printf("Coordinator start listen")
 	go http.Serve(l, nil)
 }
 
