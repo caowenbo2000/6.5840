@@ -47,6 +47,7 @@ type TaskInfo struct {
 	TaskType TaskType
 	//for map task
 	FileName string
+	NReduce  int
 	//for reduce task
 	ReduceId int
 	//for wait task

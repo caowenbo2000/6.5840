@@ -26,30 +26,32 @@ const (
 	TaskDone
 )
 
-type taskInfo struct {
+type taskStatusInfo struct {
 	taskStatus taskStatus
 	startTime  int64
 }
 
 type Coordinator struct {
 	taskStage    taskStage
-	mapStatus    map[string]*taskInfo
-	reduceStatus map[int]*taskInfo
+	mapStatus    map[string]*taskStatusInfo
+	reduceStatus map[int]*taskStatusInfo
 	mutex        sync.Mutex
+	nReduce      int
 }
 
 const taskTimeOut = int64(10)
 
 func CoordinatorInit(c *Coordinator, files []string, nReduce int) {
 	c.taskStage = MapStage
-	c.mapStatus = make(map[string]*taskInfo)
-	c.reduceStatus = make(map[int]*taskInfo)
+	c.mapStatus = make(map[string]*taskStatusInfo)
+	c.reduceStatus = make(map[int]*taskStatusInfo)
 	for _, v := range files {
-		c.mapStatus[v] = &taskInfo{TaskInit, 0}
+		c.mapStatus[v] = &taskStatusInfo{TaskInit, 0}
 	}
 	for i := 0; i < nReduce; i++ {
-		c.reduceStatus[i] = &taskInfo{TaskInit, 0}
+		c.reduceStatus[i] = &taskStatusInfo{TaskInit, 0}
 	}
+	c.nReduce = nReduce
 }
 
 func (c *Coordinator) GetTask(args *GetTaskArgs, reply *GetTaskReply) {
@@ -64,12 +66,12 @@ func (c *Coordinator) GetTask(args *GetTaskArgs, reply *GetTaskReply) {
 			}
 			if v.taskStatus == TaskInit ||
 				v.taskStatus == TaskRunning && time.Now().Unix() > taskTimeOut+v.startTime {
-				reply.TaskInfo = &TaskInfo{MapTask, k, 0, 0}
+				reply.TaskInfo = &TaskInfo{TaskType: MapTask, NReduce: c.nReduce, FileName: k}
 				return
 			}
 		}
 		if hasRunningTask {
-			reply.TaskInfo = &TaskInfo{WaitTask, "", 0, 1}
+			reply.TaskInfo = &TaskInfo{TaskType: WaitTask, WaitTime: 1}
 			return
 		} else {
 			c.taskStage = ReduceStage
@@ -84,22 +86,22 @@ func (c *Coordinator) GetTask(args *GetTaskArgs, reply *GetTaskReply) {
 			}
 			if v.taskStatus == TaskInit ||
 				v.taskStatus == TaskRunning && time.Now().Unix() > taskTimeOut+v.startTime {
-				reply.TaskInfo = &TaskInfo{ReduceTask, "", k, 0}
+				reply.TaskInfo = &TaskInfo{TaskType: ReduceTask, ReduceId: k}
 				return
 			}
 		}
 		if hasRunningTask {
-			reply.TaskInfo = &TaskInfo{WaitTask, "", 0, 1}
+			reply.TaskInfo = &TaskInfo{TaskType: WaitTask, WaitTime: 1}
 			return
 		} else {
 			c.taskStage = DoneStage
-			reply.TaskInfo = &TaskInfo{DoneTask, "", 0, 0}
+			reply.TaskInfo = &TaskInfo{TaskType: DoneTask}
 			return
 		}
 	}
 
 	if c.taskStage == DoneStage {
-		reply.TaskInfo = &TaskInfo{DoneTask, "", 0, 0}
+		reply.TaskInfo = &TaskInfo{TaskType: DoneTask}
 		return
 	}
 	return

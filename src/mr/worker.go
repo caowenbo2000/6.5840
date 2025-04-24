@@ -1,6 +1,12 @@
 package mr
 
-import "fmt"
+import (
+	"encoding/json"
+	"fmt"
+	"io/ioutil"
+	"os"
+	"sort"
+)
 import "log"
 import "net/rpc"
 import "hash/fnv"
@@ -10,6 +16,14 @@ type KeyValue struct {
 	Key   string
 	Value string
 }
+
+// for sorting by key.
+type ByKey []KeyValue
+
+// for sorting by key.
+func (a ByKey) Len() int           { return len(a) }
+func (a ByKey) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a ByKey) Less(i, j int) bool { return a[i].Key < a[j].Key }
 
 // use ihash(key) % NReduce to choose the reduce
 // task number for each KeyValue emitted by Map.
@@ -30,7 +44,7 @@ func Worker(mapf func(string, string) []KeyValue,
 		}
 
 		if taskInfo.TaskType == MapTask {
-			mapWorker(taskInfo.FileName)
+			mapWorker(taskInfo.FileName, mapf, taskInfo.NReduce)
 		}
 		if taskInfo.TaskType == ReduceTask {
 			reduceWorker(taskInfo.ReduceId)
@@ -39,8 +53,40 @@ func Worker(mapf func(string, string) []KeyValue,
 	}
 }
 
-func mapWorker(fileName string) {
+func mapWorker(fileName string, mapf func(string, string) []KeyValue, nReduce int) {
+	file, err := os.Open(fileName)
+	if err != nil {
+		log.Fatalf("cannot open %v", fileName)
+	}
+	content, err := ioutil.ReadAll(file)
+	if err != nil {
+		log.Fatalf("cannot read %v", fileName)
+	}
+	file.Close()
+	kva := mapf(fileName, string(content))
+	kvaFileWrite(kva, nReduce, fileName)
+}
 
+func kvaFileWrite(kva []KeyValue, nReduce int, fileName string) {
+	mapkva := make(map[int][]KeyValue)
+	for _, kv := range kva {
+		reduceID := ihash(kv.Key) % nReduce
+		mapkva[reduceID] = append(mapkva[reduceID], kv)
+	}
+	for reduceID, kva := range mapkva {
+		sort.Sort(ByKey(kva))
+
+		processFileName := fmt.Sprintf("mr-%v-%v-temp", fileName, reduceID)
+		file, err := os.Create(processFileName)
+		if err != nil {
+			log.Fatalf("cannot create %v", processFileName)
+		}
+
+		enc := json.NewEncoder(file)
+		enc.Encode(kva)
+		file.Close()
+		os.Rename(processFileName, fmt.Sprintf("mr-%v-%v", fileName, reduceID))
+	}
 }
 
 func reduceWorker(reduceID int) {
@@ -57,6 +103,7 @@ func CallGetTask() *TaskInfo {
 	} else {
 		fmt.Printf("call failed! \n")
 	}
+	return reply.TaskInfo
 }
 
 // example function to show how to make an RPC call to the coordinator.
